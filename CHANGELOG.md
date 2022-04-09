@@ -9,6 +9,7 @@ Subheadings to categorize changes are `added, changed, deprecated, removed, fixe
 - Added the `--address` option for `trunk serve`.
 - Open autoreload websocket using wss when assets are served over a secure connection.
 - Added the `data-type` attribute to Rust assets. Can be set to either `main` (previous behaviour and default) or `worker`, which builds the asset and includes it as a web worker.
+- Added the `preload` attribute to CSS, SASS and SCSS assets
 
 ### changed
 - Bump notify to 5.0.0-pre.13, which fixes [notify-rs/notify#356](https://github.com/notify-rs/notify/issues/356)
