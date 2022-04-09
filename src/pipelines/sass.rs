@@ -9,7 +9,7 @@ use tokio::fs;
 use tokio::task::JoinHandle;
 
 use super::{AssetFile, HashedFileOutput, LinkAttrs, TrunkLinkPipelineOutput};
-use super::{ATTR_HREF, ATTR_INLINE};
+use super::{ATTR_HREF, ATTR_INLINE, ATTR_PRELOAD};
 use crate::common;
 use crate::config::RtcBuild;
 use crate::tools::{self, Application};
@@ -24,6 +24,8 @@ pub struct Sass {
     asset: AssetFile,
     /// If the specified SASS/SCSS file should be inlined.
     use_inline: bool,
+    /// If the specified SASS/SCSS should be preloaded
+    use_preload: bool,
 }
 
 impl Sass {
@@ -39,7 +41,8 @@ impl Sass {
         path.extend(href_attr.split('/'));
         let asset = AssetFile::new(&html_dir, path).await?;
         let use_inline = attrs.get(ATTR_INLINE).is_some();
-        Ok(Self { id, cfg, asset, use_inline })
+        let use_preload = attrs.get(ATTR_PRELOAD).is_some();
+        Ok(Self { id, cfg, asset, use_inline, use_preload })
     }
 
     /// Spawn the pipeline for this asset type.
@@ -91,7 +94,12 @@ impl Sass {
         };
 
         tracing::info!(path = ?rel_path, "finished compiling sass/scss");
-        Ok(TrunkLinkPipelineOutput::Sass(SassOutput { cfg: self.cfg.clone(), id: self.id, css_ref }))
+        Ok(TrunkLinkPipelineOutput::Sass(SassOutput {
+            cfg: self.cfg.clone(),
+            id: self.id,
+            css_ref,
+            preload: self.use_preload,
+        }))
     }
 }
 
@@ -103,6 +111,8 @@ pub struct SassOutput {
     pub id: usize,
     /// Data on the finalized output file.
     pub css_ref: CssRef,
+    /// Should the file be preloaded?
+    pub preload: bool,
 }
 
 /// The resulting CSS of the SASS/SCSS compilation.
@@ -120,11 +130,19 @@ impl SassOutput {
             CssRef::Inline(css) => format!(r#"<style type="text/css">{}</style>"#, css),
             // Link to the CSS file.
             CssRef::File(file) => {
-                format!(
-                    r#"<link rel="stylesheet" href="{base}{file}"/>"#,
-                    base = &self.cfg.public_url,
-                    file = file.file_name
-                )
+                if self.preload {
+                    format!(
+                        r#"<link rel="preload" as="style" href="{base}{file}"/>"#,
+                        base = &self.cfg.public_url,
+                        file = file.file_name
+                    )
+                } else {
+                    format!(
+                        r#"<link rel="stylesheet" href="{base}{file}"/>"#,
+                        base = &self.cfg.public_url,
+                        file = file.file_name
+                    )
+                }
             }
         };
         dom.select(&super::trunk_id_selector(self.id)).replace_with_html(html);

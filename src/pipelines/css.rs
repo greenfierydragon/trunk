@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use nipper::Document;
 use tokio::task::JoinHandle;
 
-use super::ATTR_HREF;
 use super::{AssetFile, HashedFileOutput, LinkAttrs, TrunkLinkPipelineOutput};
+use super::{ATTR_HREF, ATTR_PRELOAD};
 use crate::config::RtcBuild;
 
 /// A CSS asset pipeline.
@@ -19,6 +19,8 @@ pub struct Css {
     cfg: Arc<RtcBuild>,
     /// The asset file being processed.
     asset: AssetFile,
+    /// If the specified CSS should be preloaded
+    use_preload: bool,
 }
 
 impl Css {
@@ -32,7 +34,8 @@ impl Css {
         let mut path = PathBuf::new();
         path.extend(href_attr.split('/'));
         let asset = AssetFile::new(&html_dir, path).await?;
-        Ok(Self { id, cfg, asset })
+        let use_preload = attrs.get(ATTR_PRELOAD).is_some();
+        Ok(Self { id, cfg, asset, use_preload })
     }
 
     /// Spawn the pipeline for this asset type.
@@ -52,6 +55,7 @@ impl Css {
             cfg: self.cfg.clone(),
             id: self.id,
             file: hashed_file_output,
+            preload: self.use_preload,
         }))
     }
 }
@@ -64,15 +68,27 @@ pub struct CssOutput {
     pub id: usize,
     /// Data on the finalized output file.
     pub file: HashedFileOutput,
+    /// Should the file be preloaded?
+    pub preload: bool,
 }
 
 impl CssOutput {
     pub async fn finalize(self, dom: &mut Document) -> Result<()> {
-        dom.select(&super::trunk_id_selector(self.id)).replace_with_html(format!(
-            r#"<link rel="stylesheet" href="{base}{file}"/>"#,
-            base = &self.cfg.public_url,
-            file = self.file.file_name
-        ));
+        dom.select(&super::trunk_id_selector(self.id)).replace_with_html({
+            if self.preload {
+                format!(
+                    r#"<link rel="preload" as="style" href="{base}{file}"/>"#,
+                    base = &self.cfg.public_url,
+                    file = self.file.file_name
+                )
+            } else {
+                format!(
+                    r#"<link rel="stylesheet" href="{base}{file}"/>"#,
+                    base = &self.cfg.public_url,
+                    file = self.file.file_name
+                )
+            }
+        });
         Ok(())
     }
 }

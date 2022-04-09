@@ -35,6 +35,7 @@ const ATTR_INLINE: &str = "data-inline";
 const ATTR_HREF: &str = "href";
 const ATTR_TYPE: &str = "type";
 const ATTR_REL: &str = "rel";
+const ATTR_PRELOAD: &str = "preload";
 const SNIPPETS_DIR: &str = "snippets";
 const TRUNK_ID: &str = "data-trunk-id";
 
